@@ -1,4 +1,4 @@
-pyTelegramBotAPI
+pyrogram
+tgcrypto
 google-api-python-client
 google-auth
-requests
