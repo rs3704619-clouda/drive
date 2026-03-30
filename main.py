@@ -1,4 +1,5 @@
 import os
+import json
 import asyncio
 from pyrogram import Client, filters
 from googleapiclient.discovery import build
@@ -14,19 +15,25 @@ MI_CANAL = int(os.environ.get("MI_CANAL"))
 DRIVE_FOLDER_ID = os.environ.get("DRIVE_FOLDER_ID")
 GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON")
 
-# --- CLIENTES ---
+# --- PARCHE PARA EL ERROR DE JSON ---
+# Esto limpia el JSON si se pegó con comillas extra en Railway
+limpio_json = GOOGLE_CREDS_JSON.strip()
+if limpio_json.startswith('"') and limpio_json.endswith('"'):
+    limpio_json = limpio_json[1:-1].replace('\\"', '"')
+
+with open('creds.json', 'w') as f:
+    f.write(limpio_json)
+
+# --- CONFIGURACIÓN DE CLIENTES ---
 app = Client("hysterix_bot", session_string=SESSION_STRING, api_id=API_ID, api_hash=API_HASH)
 
 # Configuración de Google Drive
-import json
-with open('creds.json', 'w') as f:
-    f.write(GOOGLE_CREDS_JSON)
 creds = service_account.Credentials.from_service_account_file('creds.json')
 drive_service = build('drive', 'v3', credentials=creds)
 
 # --- LÓGICA DEL BOT ---
 
-# Extensiones permitidas (puedes agregar más aquí)
+# Extensiones de libros permitidas
 EXT_LIBROS = (".pdf", ".epub", ".mobi", ".azw3")
 
 @app.on_message(filters.chat(CANAL_FUENTE) & filters.document)
@@ -35,7 +42,7 @@ async def procesar_documento(client, message):
     
     # FILTRO: ¿Es un formato de libro permitido?
     if file_name and file_name.lower().endswith(EXT_LIBROS):
-        aviso = await client.send_message(MI_CANAL, f"📥 **Detectado:** `{file_name}`\nDescargando y subiendo...")
+        aviso = await client.send_message(MI_CANAL, f"📥 **Detectado:** `{file_name}`\nDescargando y subiendo a Drive...")
         
         try:
             # 1. Descargar archivo de Telegram
@@ -60,11 +67,13 @@ async def procesar_documento(client, message):
             await aviso.edit(
                 f"✅ **Subido con éxito:**\n"
                 f"📂 `{file_name}`\n"
-                f"🔗 [Ver en Google Drive]({drive_link})"
+                f"🔗 [Ver en Google Drive]({drive_link})",
+                disable_web_page_preview=True
             )
             
-            # Limpiar archivo temporal
-            os.remove(path)
+            # Limpiar archivo temporal de Railway
+            if os.path.exists(path):
+                os.remove(path)
             
         except Exception as e:
             await client.send_message(MI_CANAL, f"❌ **Error con:** `{file_name}`\n`{str(e)}`")
