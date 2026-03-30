@@ -1,53 +1,73 @@
 import os
-import io
-import json
 import asyncio
 from pyrogram import Client, filters
-from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+from google.oauth2 import service_account
+from googleapiclient.http import MediaFileUpload
 
-# --- VARIABLES DESDE RAILWAY ---
+# --- CONFIGURACIÓN DESDE RAILWAY (VARIABLES) ---
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
-SESSION_STRING = os.environ.get("SESSION_STRING") # Aquí irá tu sesión activa
-FOLDER_ID = os.environ.get("DRIVE_FOLDER_ID")
-CANAL_FUENTE = int(os.environ.get("CANAL_FUENTE")) # ID del canal a "espejear"
-MI_CANAL = int(os.environ.get("MI_CANAL")) # Tu canal de avisos
+SESSION_STRING = os.environ.get("SESSION_STRING")
+CANAL_FUENTE = int(os.environ.get("CANAL_FUENTE"))
+MI_CANAL = int(os.environ.get("MI_CANAL"))
+DRIVE_FOLDER_ID = os.environ.get("DRIVE_FOLDER_ID")
+GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON")
 
-# --- GOOGLE DRIVE SETUP ---
-creds_dict = json.loads(os.environ.get("GOOGLE_CREDS_JSON"))
-creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/drive'])
+# --- CLIENTES ---
+app = Client("hysterix_bot", session_string=SESSION_STRING, api_id=API_ID, api_hash=API_HASH)
+
+# Configuración de Google Drive
+import json
+with open('creds.json', 'w') as f:
+    f.write(GOOGLE_CREDS_JSON)
+creds = service_account.Credentials.from_service_account_file('creds.json')
 drive_service = build('drive', 'v3', credentials=creds)
 
-# --- USERBOT SETUP ---
-app = Client("hysterix_userbot", session_string=SESSION_STRING, api_id=API_ID, api_hash=API_HASH)
+# --- LÓGICA DEL BOT ---
 
-@app.on_message(filters.chat(CANAL_FUENTE) & (filters.document | filters.video | filters.audio))
-async def mirror_to_drive(client, message):
-    try:
-        # 1. Definir nombre del archivo
-        file_name = message.document.file_name if message.document else f"archivo_{message.id}"
-        await app.send_message(MI_CANAL, f"📡 **Capturando de canal ajeno:** `{file_name}`...")
+# Extensiones permitidas (puedes agregar más aquí)
+EXT_LIBROS = (".pdf", ".epub", ".mobi", ".azw3")
 
-        # 2. Descargar a la RAM
-        file_data = await client.download_media(message, in_memory=True)
+@app.on_message(filters.chat(CANAL_FUENTE) & filters.document)
+async def procesar_documento(client, message):
+    file_name = message.document.file_name
+    
+    # FILTRO: ¿Es un formato de libro permitido?
+    if file_name and file_name.lower().endswith(EXT_LIBROS):
+        aviso = await client.send_message(MI_CANAL, f"📥 **Detectado:** `{file_name}`\nDescargando y subiendo...")
         
-        # 3. Subir a Drive
-        file_metadata = {'name': file_name, 'parents': [FOLDER_ID]}
-        media = MediaIoBaseUpload(io.BytesIO(file_data.getbuffer()), mimetype='application/octet-stream', resumable=True)
-        
-        uploaded = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
-        
-        # 4. Hacerlo público y avisar
-        drive_service.permissions().create(fileId=uploaded.get('id'), body={'type': 'anyone', 'role': 'viewer'}).execute()
-        
-        link = uploaded.get('webViewLink')
-        await app.send_message(MI_CANAL, f"✅ **Subido a Drive:**\n📂 `{file_name}`\n🔗 [Link de Descarga]({link})")
+        try:
+            # 1. Descargar archivo de Telegram
+            path = await message.download()
+            
+            # 2. Preparar subida a Google Drive
+            file_metadata = {
+                'name': file_name,
+                'parents': [DRIVE_FOLDER_ID]
+            }
+            media = MediaFileUpload(path, resumable=True)
+            
+            # 3. Subir a Drive
+            drive_file = drive_service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, webViewLink'
+            ).execute()
+            
+            # 4. Avisar en TU CANAL con el link
+            drive_link = drive_file.get('webViewLink')
+            await aviso.edit(
+                f"✅ **Subido con éxito:**\n"
+                f"📂 `{file_name}`\n"
+                f"🔗 [Ver en Google Drive]({drive_link})"
+            )
+            
+            # Limpiar archivo temporal
+            os.remove(path)
+            
+        except Exception as e:
+            await client.send_message(MI_CANAL, f"❌ **Error con:** `{file_name}`\n`{str(e)}`")
 
-    except Exception as e:
-        print(f"Error: {e}")
-
-if __name__ == "__main__":
-    print("UserBot Espejo Hysterix en marcha... 🕵️")
-    app.run()
+print("🕵️ UserBot Espejo Hysterix en marcha...")
+app.run()
