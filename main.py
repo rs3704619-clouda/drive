@@ -70,24 +70,49 @@ def consultar_rapidsport(eq1, eq2):
 # --- FOOTBALL DATA (REAL) ---
 def buscar_team_id(nombre):
     headers = {"X-Auth-Token": FOOTBALL_KEY}
-    ligas = ["PD", "PL", "CL"]  # LaLiga, Premier, Champions
+    ligas = ["PD", "PL", "CL"]
 
-    nombre = nombre.lower()
+    nombre = nombre.lower().strip()
+
+    mejor_score = 0
+    mejor_equipo = None
 
     for liga in ligas:
         try:
             url = f"https://api.football-data.org/v4/competitions/{liga}/teams"
             r = requests.get(url, headers=headers, timeout=10)
+
+            if r.status_code != 200:
+                continue
+
             teams = r.json().get("teams", [])
 
             for t in teams:
                 team_name = t["name"].lower()
 
-                if nombre in team_name:
+                # score de coincidencia
+                score = 0
+
+                if nombre == team_name:
                     return t["id"], t["name"]
+
+                if nombre in team_name:
+                    score += 2
+
+                palabras = nombre.split()
+                for p in palabras:
+                    if p in team_name:
+                        score += 1
+
+                if score > mejor_score:
+                    mejor_score = score
+                    mejor_equipo = (t["id"], t["name"])
 
         except:
             continue
+
+    if mejor_equipo:
+        return mejor_equipo
 
     return None, None
 
