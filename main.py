@@ -67,15 +67,12 @@ def consultar_rapidsport(eq1, eq2):
     except:
         return "Error API H2H"
 
-# --- FOOTBALL DATA (REAL) ---
+# --- BUSQUEDA EXACTA (ARREGLADA) ---
 def buscar_team_id(nombre):
     headers = {"X-Auth-Token": FOOTBALL_KEY}
     ligas = ["PD", "PL", "CL"]
 
     nombre = nombre.lower().strip()
-
-    mejor_score = 0
-    mejor_equipo = None
 
     for liga in ligas:
         try:
@@ -90,38 +87,25 @@ def buscar_team_id(nombre):
             for t in teams:
                 team_name = t["name"].lower()
 
-                # score de coincidencia
-                score = 0
-
                 if nombre == team_name:
                     return t["id"], t["name"]
-
-                if nombre in team_name:
-                    score += 2
-
-                palabras = nombre.split()
-                for p in palabras:
-                    if p in team_name:
-                        score += 1
-
-                if score > mejor_score:
-                    mejor_score = score
-                    mejor_equipo = (t["id"], t["name"])
 
         except:
             continue
 
-    if mejor_equipo:
-        return mejor_equipo
-
     return None, None
 
+# --- STATS ---
 def obtener_stats_equipo(team_id):
     url = f"https://api.football-data.org/v4/teams/{team_id}/matches?limit=10"
     headers = {"X-Auth-Token": FOOTBALL_KEY}
 
     try:
         r = requests.get(url, headers=headers, timeout=10)
+
+        if r.status_code != 200:
+            return 1.2, 1.2
+
         matches = r.json().get("matches", [])
 
         gf = gc = partidos = 0
@@ -144,6 +128,7 @@ def obtener_stats_equipo(team_id):
             return 1.2, 1.2
 
         return gf / partidos, gc / partidos
+
     except:
         return 1.2, 1.2
 
@@ -228,22 +213,19 @@ def juego(message):
     try:
         e1, e2 = query.split(" vs ")
 
-        # H2H
         h2h = consultar_rapidsport(e1, e2)
 
-        # IDs reales
         id1, name1 = buscar_team_id(e1)
         id2, name2 = buscar_team_id(e2)
 
         if not id1 or not id2:
-    bot.edit_message_text(
-        "Error: usa nombres EXACTOS.\nEjemplo:\nReal Madrid CF vs FC Barcelona",
-        message.chat.id,
-        msg.message_id
-    )
-    return
+            bot.edit_message_text(
+                "Error: usa nombres EXACTOS.\nEjemplo:\nReal Madrid CF vs FC Barcelona",
+                message.chat.id,
+                msg.message_id
+            )
+            return
 
-        # stats reales
         atk1, def1 = obtener_stats_equipo(id1)
         atk2, def2 = obtener_stats_equipo(id2)
 
