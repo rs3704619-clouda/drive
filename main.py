@@ -9,7 +9,7 @@ import time
 import sqlite3
 from datetime import datetime
 import math
-import unicodedata  # 👈 NUEVO
+import unicodedata
 
 # --- CONFIG ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -46,7 +46,7 @@ if GEMINI_KEY:
 bot.remove_webhook()
 
 # -----------------------------
-# 🧹 LIMPIAR TEXTO (NUEVO)
+# 🧹 LIMPIAR TEXTO
 # -----------------------------
 def limpiar_texto(texto):
     texto = texto.lower().strip()
@@ -60,7 +60,7 @@ def limpiar_texto(texto):
 def buscar_team_id(nombre):
     headers = {"X-Auth-Token": FOOTBALL_KEY}
     ligas = ["PD", "PL", "CL"]
-    nombre = limpiar_texto(nombre)  # 👈 FIX
+    nombre = limpiar_texto(nombre)
 
     coincidencias = []
 
@@ -76,17 +76,22 @@ def buscar_team_id(nombre):
                 continue
 
             for t in r.json().get("teams", []):
-                team_name = limpiar_texto(t["name"])  # 👈 FIX
+                team_name = limpiar_texto(t["name"])
+
+                palabras_input = nombre.split()
+                palabras_team = team_name.split()
 
                 if nombre == team_name:
                     return t["id"], t["name"]
 
-                if nombre in team_name or team_name in nombre:  # 👈 FIX
+                coincide = sum(1 for p in palabras_input if p in palabras_team)
+
+                if coincide >= 1:
                     coincidencias.append((t["id"], t["name"]))
         except:
             continue
 
-    if len(coincidencias) == 1:
+    if len(coincidencias) >= 1:
         return coincidencias[0]
 
     return None, None
@@ -101,7 +106,7 @@ def buscar_team_id_mx(nombre):
         "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
     }
 
-    nombre = limpiar_texto(nombre)  # 👈 FIX
+    nombre = limpiar_texto(nombre)
 
     for year in range(datetime.now().year, datetime.now().year - 3, -1):
         try:
@@ -119,15 +124,20 @@ def buscar_team_id_mx(nombre):
             coincidencias = []
 
             for e in equipos:
-                name = limpiar_texto(e["team"]["name"])  # 👈 FIX
+                name = limpiar_texto(e["team"]["name"])
+
+                palabras_input = nombre.split()
+                palabras_team = name.split()
 
                 if nombre == name:
                     return e["team"]["id"], e["team"]["name"]
 
-                if nombre in name or name in nombre:  # 👈 FIX
+                coincide = sum(1 for p in palabras_input if p in palabras_team)
+
+                if coincide >= 1:
                     coincidencias.append((e["team"]["id"], e["team"]["name"]))
 
-            if len(coincidencias) == 1:
+            if len(coincidencias) >= 1:
                 return coincidencias[0]
 
         except:
@@ -136,7 +146,7 @@ def buscar_team_id_mx(nombre):
     return None, None
 
 # -----------------------------
-# 📊 STATS EUROPA (PONDERADO)
+# 📊 STATS EUROPA
 # -----------------------------
 def stats_europa(team_id):
     headers = {"X-Auth-Token": FOOTBALL_KEY}
@@ -173,7 +183,7 @@ def stats_europa(team_id):
         return 1.2, 1.2
 
 # -----------------------------
-# 📊 STATS LIGA MX (REAL)
+# 📊 STATS LIGA MX
 # -----------------------------
 def stats_mx(team_id):
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
@@ -221,7 +231,7 @@ def stats_mx(team_id):
         return 1.2, 1.2
 
 # -----------------------------
-# ⚙️ POISSON PRO
+# ⚙️ POISSON
 # -----------------------------
 def poisson(k, lamb):
     return (lamb**k * math.exp(-lamb)) / math.factorial(k)
@@ -320,7 +330,6 @@ def juego(message):
         atk1, def1 = stats_mx(id1) if es_mx1 else stats_europa(id1)
         atk2, def2 = stats_mx(id2) if es_mx2 else stats_europa(id2)
 
-        # ventaja local
         l1 = (atk1 + def2) / 2 + 0.15
         l2 = (atk2 + def1) / 2
 
