@@ -84,11 +84,20 @@ def buscar_team_id(nombre):
 
             teams = r.json().get("teams", [])
 
+            coincidencias = []
+
             for t in teams:
                 team_name = t["name"].lower()
 
                 if nombre == team_name:
                     return t["id"], t["name"]
+
+                if nombre in team_name:
+                    coincidencias.append((t["id"], t["name"]))
+
+            # 🔥 SOLO aceptar si hay UNA coincidencia
+            if len(coincidencias) == 1:
+                return coincidencias[0]
 
         except:
             continue
