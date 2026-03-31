@@ -5,26 +5,30 @@ import numpy as np
 from scipy.optimize import minimize
 from scipy.stats import poisson
 
-# 1. CONFIGURACIÓN DE CRENDECIALES (Se leen de GitHub Secrets)
-DATABASE_URL = os.getenv('DATABASE_URL')
+# 1. CONFIGURACIÓN (Lo que acabas de escribir)
 API_KEY = os.getenv('API_KEY_FUTBOL')
-LEAGUE_ID = 140  # Ejemplo: LaLiga. Cambia según necesites.
-SEASON = 2025
+DATABASE_URL = os.getenv('DATABASE_URL')
+LEAGUE_ID = 140  # LaLiga
+SEASON = 2024
 
 def obtener_datos_api():
-    print("Descargando resultados de la API...")
+    print(f"Descargando resultados para la Liga {LEAGUE_ID}, Temporada {SEASON}...")
     url = f"https://v3.football.api-sports.io/fixtures?league={LEAGUE_ID}&season={SEASON}&status=FT"
     headers = {'x-apisports-key': API_KEY}
     response = requests.get(url, headers=headers).json()
     
+    print(f"Total de partidos encontrados: {len(response.get('response', []))}")
+    
     partidos = []
-    for f in response['response']:
+    for f in response.get('response', []):
         local = f['teams']['home']['name']
         visita = f['teams']['away']['name']
         goles_l = f['goals']['home']
         goles_v = f['goals']['away']
         partidos.append([local, visita, goles_l, goles_v])
     return partidos
+
+# --- AQUÍ SIGUE EL RESTO QUE HACE LA MAGIA ---
 
 def funcion_objetivo(params, partidos, nombres_equipos):
     n = len(nombres_equipos)
@@ -41,22 +45,19 @@ def funcion_objetivo(params, partidos, nombres_equipos):
 
 def entrenar_y_subir():
     partidos = obtener_datos_api()
-    if not partidos: 
-        print("No hay partidos finalizados para entrenar.")
+    if not partidos:
+        print("Error: No se encontraron partidos. Revisa el LEAGUE_ID o la SEASON.")
         return
 
     equipos = list(set([p[0] for p in partidos] + [p[1] for p in partidos]))
     n = len(equipos)
     
-    print(f"Entrenando modelo para {n} equipos...")
     res = minimize(funcion_objetivo, np.zeros(2*n + 1), args=(partidos, equipos))
     atk_f, dfn_f, home_f = res.x[:n], res.x[n:2*n], res.x[-1]
 
-    # CONEXIÓN A RAILWAY
     conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()
     
-    # Crear tabla si no existe
     cur.execute("""
         CREATE TABLE IF NOT EXISTS modelo_futbol (
             equipo VARCHAR PRIMARY KEY,
