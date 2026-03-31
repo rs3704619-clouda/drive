@@ -236,8 +236,12 @@ def juego(message):
         id2, name2 = buscar_team_id(e2)
 
         if not id1 or not id2:
-            bot.edit_message_text("Equipos no encontrados en API real", message.chat.id, msg.message_id)
-            return
+    bot.edit_message_text(
+        "Error: usa nombres EXACTOS.\nEjemplo:\nReal Madrid CF vs FC Barcelona",
+        message.chat.id,
+        msg.message_id
+    )
+    return
 
         # stats reales
         atk1, def1 = obtener_stats_equipo(id1)
