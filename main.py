@@ -13,8 +13,8 @@ import math
 # --- CONFIG ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_KEY = os.environ.get("GEMINI_KEY")
-SPORTS_KEY = os.environ.get("SPORTS_API_KEY")  # RapidAPI
-FOOTBALL_KEY = os.environ.get("FOOTBALL_DATA_KEY")  # Football-Data
+SPORTS_KEY = os.environ.get("SPORTS_API_KEY")
+FOOTBALL_KEY = os.environ.get("FOOTBALL_DATA_KEY")
 PORT = int(os.environ.get("PORT", 7860))
 
 bot = telebot.TeleBot(TOKEN)
@@ -44,6 +44,10 @@ if GEMINI_KEY:
 
 bot.remove_webhook()
 
+# --- TEMPORADA DINÁMICA ---
+def obtener_temporada_actual():
+    return datetime.now().year
+
 # --- H2H ---
 def consultar_rapidsport(eq1, eq2):
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures/headtohead"
@@ -67,7 +71,7 @@ def consultar_rapidsport(eq1, eq2):
     except:
         return "Error API H2H"
 
-# --- BUSCAR EQUIPO EUROPA ---
+# --- EUROPA ---
 def buscar_team_id(nombre):
     headers = {"X-Auth-Token": FOOTBALL_KEY}
     ligas = ["PD", "PL", "CL"]
@@ -102,7 +106,7 @@ def buscar_team_id(nombre):
 
     return None, None
 
-# --- BUSCAR EQUIPO LIGA MX ---
+# --- LIGA MX (INTELIGENTE) ---
 def buscar_team_id_mx(nombre):
     url = "https://api-football-v1.p.rapidapi.com/v3/teams"
     headers = {
@@ -112,31 +116,46 @@ def buscar_team_id_mx(nombre):
 
     nombre = nombre.lower().strip()
 
-    try:
-        r = requests.get(url, headers=headers, params={"league": 262, "season": 2024}, timeout=10)
-        data = r.json()
-        equipos = data.get("response", [])
+    # 🔥 prueba temporada actual y retrocede
+    year = obtener_temporada_actual()
 
-        coincidencias = []
+    for intento in range(3):  # prueba año actual y 2 anteriores
+        temporada = year - intento
 
-        for e in equipos:
-            team_name = e["team"]["name"].lower()
+        try:
+            r = requests.get(
+                url,
+                headers=headers,
+                params={"league": 262, "season": temporada},
+                timeout=10
+            )
 
-            if nombre == team_name:
-                return e["team"]["id"], e["team"]["name"]
+            if r.status_code != 200:
+                continue
 
-            if nombre in team_name:
-                coincidencias.append((e["team"]["id"], e["team"]["name"]))
+            data = r.json()
+            equipos = data.get("response", [])
 
-        if len(coincidencias) == 1:
-            return coincidencias[0]
+            coincidencias = []
 
-    except:
-        pass
+            for e in equipos:
+                team_name = e["team"]["name"].lower()
+
+                if nombre == team_name:
+                    return e["team"]["id"], e["team"]["name"]
+
+                if nombre in team_name:
+                    coincidencias.append((e["team"]["id"], e["team"]["name"]))
+
+            if len(coincidencias) == 1:
+                return coincidencias[0]
+
+        except:
+            continue
 
     return None, None
 
-# --- STATS (EUROPA) ---
+# --- STATS ---
 def obtener_stats_equipo(team_id):
     url = f"https://api.football-data.org/v4/teams/{team_id}/matches?limit=10"
     headers = {"X-Auth-Token": FOOTBALL_KEY}
@@ -259,7 +278,6 @@ def juego(message):
         id1, name1 = buscar_team_id(e1)
         id2, name2 = buscar_team_id(e2)
 
-        # 🔥 fallback Liga MX
         if not id1:
             id1, name1 = buscar_team_id_mx(e1)
 
