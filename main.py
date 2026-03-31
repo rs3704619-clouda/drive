@@ -44,7 +44,7 @@ if GEMINI_KEY:
 
 bot.remove_webhook()
 
-# --- RAPIDAPI H2H ---
+# --- H2H ---
 def consultar_rapidsport(eq1, eq2):
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures/headtohead"
     headers = {
@@ -67,12 +67,14 @@ def consultar_rapidsport(eq1, eq2):
     except:
         return "Error API H2H"
 
-# --- BUSQUEDA EXACTA (ARREGLADA) ---
+# --- BUSCAR EQUIPO (ARREGLADO) ---
 def buscar_team_id(nombre):
     headers = {"X-Auth-Token": FOOTBALL_KEY}
     ligas = ["PD", "PL", "CL"]
 
     nombre = nombre.lower().strip()
+
+    coincidencias = []
 
     for liga in ligas:
         try:
@@ -84,8 +86,6 @@ def buscar_team_id(nombre):
 
             teams = r.json().get("teams", [])
 
-            coincidencias = []
-
             for t in teams:
                 team_name = t["name"].lower()
 
@@ -95,12 +95,11 @@ def buscar_team_id(nombre):
                 if nombre in team_name:
                     coincidencias.append((t["id"], t["name"]))
 
-            # 🔥 SOLO aceptar si hay UNA coincidencia
-            if len(coincidencias) == 1:
-                return coincidencias[0]
-
         except:
             continue
+
+    if len(coincidencias) == 1:
+        return coincidencias[0]
 
     return None, None
 
@@ -229,7 +228,7 @@ def juego(message):
 
         if not id1 or not id2:
             bot.edit_message_text(
-                "Error: usa nombres EXACTOS.\nEjemplo:\nReal Madrid CF vs FC Barcelona",
+                "Error: equipos no encontrados o ambiguos",
                 message.chat.id,
                 msg.message_id
             )
