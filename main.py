@@ -57,44 +57,27 @@ def limpiar_texto(texto):
 # -----------------------------
 # 🔎 BUSCAR EQUIPO EUROPA
 # -----------------------------
-def buscar_team_id(nombre):
-    headers = {"X-Auth-Token": FOOTBALL_KEY}
-    ligas = ["PD", "PL", "CL"]
-    nombre = limpiar_texto(nombre)
+def consultar_rapidsport(eq1, eq2):
+    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures/headtohead"
+    headers = {
+        "X-RapidAPI-Key": SPORTS_KEY,
+        "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
+    }
+    try:
+        r = requests.get(url, headers=headers, params={"h2h": f"{eq1}-{eq2}"}, timeout=10)
+        data = r.json()
+        fixtures = data.get('response', [])[:5]
 
-    coincidencias = []
+        if not fixtures:
+            return "Sin historial reciente."
 
-    for liga in ligas:
-        try:
-            r = requests.get(
-                f"https://api.football-data.org/v4/competitions/{liga}/teams",
-                headers=headers,
-                timeout=10
-            )
+        resumen = ""
+        for f in fixtures:
+            resumen += f"{f['teams']['home']['name']} {f['goals']['home']}-{f['goals']['away']} {f['teams']['away']['name']}\n"
 
-            if r.status_code != 200:
-                continue
-
-            for t in r.json().get("teams", []):
-                team_name = limpiar_texto(t["name"])
-
-                palabras_input = nombre.split()
-                palabras_team = team_name.split()
-
-                if nombre == team_name:
-                    return t["id"], t["name"]
-
-                coincide = sum(1 for p in palabras_input if p in palabras_team)
-
-                if coincide >= 1:
-                    coincidencias.append((t["id"], t["name"]))
-        except:
-            continue
-
-    if len(coincidencias) >= 1:
-        return coincidencias[0]
-
-    return None, None
+        return resumen
+    except:
+        return "Error API"
 
 # -----------------------------
 # 🔎 BUSCAR EQUIPO LIGA MX
