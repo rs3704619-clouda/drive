@@ -44,33 +44,9 @@ if GEMINI_KEY:
 
 bot.remove_webhook()
 
-# --- TEMPORADA ---
-def temporada_actual():
-    return datetime.now().year
-
-# --- H2H ---
-def consultar_rapidsport(eq1, eq2):
-    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures/headtohead"
-    headers = {
-        "X-RapidAPI-Key": SPORTS_KEY,
-        "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
-    }
-    try:
-        r = requests.get(url, headers=headers, params={"h2h": f"{eq1}-{eq2}"}, timeout=10)
-        data = r.json()
-        fixtures = data.get('response', [])[:5]
-
-        if not fixtures:
-            return "Sin historial reciente."
-
-        return "\n".join([
-            f"{f['teams']['home']['name']} {f['goals']['home']}-{f['goals']['away']} {f['teams']['away']['name']}"
-            for f in fixtures
-        ])
-    except:
-        return "Error API H2H"
-
-# --- BUSCAR EUROPA ---
+# -----------------------------
+# 🔎 BUSCAR EQUIPO EUROPA
+# -----------------------------
 def buscar_team_id(nombre):
     headers = {"X-Auth-Token": FOOTBALL_KEY}
     ligas = ["PD", "PL", "CL"]
@@ -82,8 +58,10 @@ def buscar_team_id(nombre):
         try:
             r = requests.get(
                 f"https://api.football-data.org/v4/competitions/{liga}/teams",
-                headers=headers, timeout=10
+                headers=headers,
+                timeout=10
             )
+
             if r.status_code != 200:
                 continue
 
@@ -103,7 +81,9 @@ def buscar_team_id(nombre):
 
     return None, None
 
-# --- BUSCAR LIGA MX ---
+# -----------------------------
+# 🔎 BUSCAR EQUIPO LIGA MX
+# -----------------------------
 def buscar_team_id_mx(nombre):
     url = "https://api-football-v1.p.rapidapi.com/v3/teams"
     headers = {
@@ -113,12 +93,14 @@ def buscar_team_id_mx(nombre):
 
     nombre = nombre.lower().strip()
 
-    for year_offset in range(3):
-        season = temporada_actual() - year_offset
-
+    for year in range(datetime.now().year, datetime.now().year - 3, -1):
         try:
-            r = requests.get(url, headers=headers,
-                params={"league": 262, "season": season}, timeout=10)
+            r = requests.get(
+                url,
+                headers=headers,
+                params={"league": 262, "season": year},
+                timeout=10
+            )
 
             if r.status_code != 200:
                 continue
@@ -143,7 +125,9 @@ def buscar_team_id_mx(nombre):
 
     return None, None
 
-# --- STATS EUROPA (FORMA + LOCAL/VISITANTE) ---
+# -----------------------------
+# 📊 STATS EUROPA (PONDERADO)
+# -----------------------------
 def stats_europa(team_id):
     headers = {"X-Auth-Token": FOOTBALL_KEY}
     url = f"https://api.football-data.org/v4/teams/{team_id}/matches?limit=10"
@@ -160,7 +144,7 @@ def stats_europa(team_id):
             if score["home"] is None:
                 continue
 
-            peso = (10 - i)  # más reciente pesa más
+            peso = 10 - i
             peso_total += peso
 
             if m["homeTeam"]["id"] == team_id:
@@ -178,7 +162,9 @@ def stats_europa(team_id):
     except:
         return 1.2, 1.2
 
-# --- STATS LIGA MX ---
+# -----------------------------
+# 📊 STATS LIGA MX (REAL)
+# -----------------------------
 def stats_mx(team_id):
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
     headers = {
@@ -187,8 +173,12 @@ def stats_mx(team_id):
     }
 
     try:
-        r = requests.get(url, headers=headers,
-            params={"team": team_id, "last": 10}, timeout=10)
+        r = requests.get(
+            url,
+            headers=headers,
+            params={"team": team_id, "last": 10},
+            timeout=10
+        )
 
         partidos = r.json().get("response", [])
 
@@ -202,7 +192,7 @@ def stats_mx(team_id):
             if g1 is None:
                 continue
 
-            peso = (10 - i)
+            peso = 10 - i
             peso_total += peso
 
             if m["teams"]["home"]["id"] == team_id:
@@ -220,7 +210,9 @@ def stats_mx(team_id):
     except:
         return 1.2, 1.2
 
-# --- POISSON PRO ---
+# -----------------------------
+# ⚙️ POISSON PRO
+# -----------------------------
 def poisson(k, lamb):
     return (lamb**k * math.exp(-lamb)) / math.factorial(k)
 
@@ -230,6 +222,7 @@ def prob_poisson(l1, l2):
     for i in range(6):
         for j in range(6):
             p = poisson(i, l1) * poisson(j, l2)
+
             if i > j:
                 p1 += p
             elif i < j:
@@ -237,45 +230,52 @@ def prob_poisson(l1, l2):
             else:
                 px += p
 
-    return round(p1*100,2), round(px*100,2), round(p2*100,2)
+    return round(p1*100, 2), round(px*100, 2), round(p2*100, 2)
 
-# --- SCAN ---
+# -----------------------------
+# 🔍 SCAN
+# -----------------------------
 @bot.message_handler(commands=['scan'])
 def scan(message):
     modelos = [m.name.replace('models/', '') for m in genai.list_models()
                if 'generateContent' in m.supported_generation_methods]
 
     nodos = []
+
     for m in modelos:
         try:
             t0 = time.time()
             genai.GenerativeModel(m).generate_content("hi")
-            nodos.append((m, round(time.time()-t0,2)))
+            nodos.append((m, round(time.time()-t0, 2)))
         except:
             continue
 
     nodos.sort(key=lambda x: x[1])
 
     kb = InlineKeyboardMarkup()
-    for n,t in nodos:
+    for n, t in nodos:
         kb.add(InlineKeyboardButton(f"{n} ({t}s)", callback_data=f"set_{n}"))
 
     bot.send_message(message.chat.id, "Selecciona nodo:", reply_markup=kb)
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("set_"))
 def setn(c):
-    NODO_ACTIVO[c.message.chat.id] = c.data.replace("set_","")
+    NODO_ACTIVO[c.message.chat.id] = c.data.replace("set_", "")
     bot.edit_message_text("Nodo activado", c.message.chat.id, c.message.message_id)
 
-# --- JUEGO ---
+# -----------------------------
+# ⚽ JUEGO
+# -----------------------------
 @bot.message_handler(commands=['juego'])
 def juego(message):
     nodo = NODO_ACTIVO.get(message.chat.id)
+
     if not nodo:
         bot.reply_to(message, "Usa /scan primero")
         return
 
-    txt = message.text.replace("/juego","").strip()
+    txt = message.text.replace("/juego", "").strip()
+
     if " vs " not in txt:
         bot.reply_to(message, "Formato: equipo1 vs equipo2")
         return
@@ -300,7 +300,11 @@ def juego(message):
             es_mx2 = True
 
         if not id1 or not id2:
-            bot.edit_message_text("Equipos no encontrados", message.chat.id, msg.message_id)
+            bot.edit_message_text(
+                "Equipos no encontrados. Usa nombres más claros.",
+                message.chat.id,
+                msg.message_id
+            )
             return
 
         atk1, def1 = stats_mx(id1) if es_mx1 else stats_europa(id1)
@@ -324,11 +328,15 @@ xG:
 """
 
         prompt = f"""
-Eres el Oráculo Hysterix.
+Eres el Perro Loco.
 
 {base}
 
-Analiza sin inventar probabilidades.
+⚽ DIAGNÓSTICO:
+
+📊 PROBABILIDADES:
+
+🎯 PICK:
 
 GANADOR:
 PICK:
@@ -336,12 +344,15 @@ CONFIANZA:
 """
 
         res = genai.GenerativeModel(nodo).generate_content(prompt).text
+
         bot.edit_message_text(res, message.chat.id, msg.message_id)
 
     except Exception as e:
         bot.edit_message_text(str(e), message.chat.id, msg.message_id)
 
-# --- SERVER ---
+# -----------------------------
+# 🚀 SERVER
+# -----------------------------
 def run():
     app.run(host="0.0.0.0", port=PORT)
 
