@@ -13,8 +13,8 @@ import math
 # --- CONFIG ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_KEY = os.environ.get("GEMINI_KEY")
-SPORTS_KEY = os.environ.get("SPORTS_API_KEY")
-FOOTBALL_KEY = os.environ.get("FOOTBALL_DATA_KEY")
+SPORTS_KEY = os.environ.get("SPORTS_API_KEY")  # RapidAPI
+FOOTBALL_KEY = os.environ.get("FOOTBALL_DATA_KEY")  # Football-Data
 PORT = int(os.environ.get("PORT", 7860))
 
 bot = telebot.TeleBot(TOKEN)
@@ -67,13 +67,12 @@ def consultar_rapidsport(eq1, eq2):
     except:
         return "Error API H2H"
 
-# --- BUSCAR EQUIPO (ARREGLADO) ---
+# --- BUSCAR EQUIPO EUROPA ---
 def buscar_team_id(nombre):
     headers = {"X-Auth-Token": FOOTBALL_KEY}
     ligas = ["PD", "PL", "CL"]
 
     nombre = nombre.lower().strip()
-
     coincidencias = []
 
     for liga in ligas:
@@ -103,7 +102,41 @@ def buscar_team_id(nombre):
 
     return None, None
 
-# --- STATS ---
+# --- BUSCAR EQUIPO LIGA MX ---
+def buscar_team_id_mx(nombre):
+    url = "https://api-football-v1.p.rapidapi.com/v3/teams"
+    headers = {
+        "X-RapidAPI-Key": SPORTS_KEY,
+        "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
+    }
+
+    nombre = nombre.lower().strip()
+
+    try:
+        r = requests.get(url, headers=headers, params={"league": 262, "season": 2024}, timeout=10)
+        data = r.json()
+        equipos = data.get("response", [])
+
+        coincidencias = []
+
+        for e in equipos:
+            team_name = e["team"]["name"].lower()
+
+            if nombre == team_name:
+                return e["team"]["id"], e["team"]["name"]
+
+            if nombre in team_name:
+                coincidencias.append((e["team"]["id"], e["team"]["name"]))
+
+        if len(coincidencias) == 1:
+            return coincidencias[0]
+
+    except:
+        pass
+
+    return None, None
+
+# --- STATS (EUROPA) ---
 def obtener_stats_equipo(team_id):
     url = f"https://api.football-data.org/v4/teams/{team_id}/matches?limit=10"
     headers = {"X-Auth-Token": FOOTBALL_KEY}
@@ -225,6 +258,13 @@ def juego(message):
 
         id1, name1 = buscar_team_id(e1)
         id2, name2 = buscar_team_id(e2)
+
+        # 🔥 fallback Liga MX
+        if not id1:
+            id1, name1 = buscar_team_id_mx(e1)
+
+        if not id2:
+            id2, name2 = buscar_team_id_mx(e2)
 
         if not id1 or not id2:
             bot.edit_message_text(
