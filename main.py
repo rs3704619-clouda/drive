@@ -108,40 +108,42 @@ def buscar_team_id_mx(nombre):
 
     nombre = limpiar_texto(nombre)
 
-    for year in range(datetime.now().year, datetime.now().year - 3, -1):
-        try:
-            r = requests.get(
-                url,
-                headers=headers,
-                params={"league": 262, "season": year},
-                timeout=10
-            )
+    try:
+        r = requests.get(
+            url,
+            headers=headers,
+            params={"league": 262, "season": datetime.now().year},
+            timeout=10
+        )
 
-            if r.status_code != 200:
-                continue
+        if r.status_code != 200:
+            return None, None
 
-            equipos = r.json().get("response", [])
-            coincidencias = []
+        equipos = r.json().get("response", [])
 
-            for e in equipos:
-                name = limpiar_texto(e["team"]["name"])
+        mejor_match = None
+        mejor_score = 0
 
-                palabras_input = nombre.split()
-                palabras_team = name.split()
+        for e in equipos:
+            team_name_raw = e["team"]["name"]
+            team_name = limpiar_texto(team_name_raw)
 
-                if nombre == name:
-                    return e["team"]["id"], e["team"]["name"]
+            palabras_input = set(nombre.split())
+            palabras_team = set(team_name.split())
 
-                coincide = sum(1 for p in palabras_input if p in palabras_team)
+            # score por coincidencia de palabras
+            score = len(palabras_input & palabras_team)
 
-                if coincide >= 1:
-                    coincidencias.append((e["team"]["id"], e["team"]["name"]))
+            if score > mejor_score:
+                mejor_score = score
+                mejor_match = (e["team"]["id"], team_name_raw)
 
-            if len(coincidencias) >= 1:
-                return coincidencias[0]
+        # mínimo 1 palabra en común
+        if mejor_score >= 1:
+            return mejor_match
 
-        except:
-            continue
+    except:
+        pass
 
     return None, None
 
