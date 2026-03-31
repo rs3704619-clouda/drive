@@ -1,5 +1,5 @@
-python-telegram-bot
-requests
-psycopg2-binary
-flask
-gunicorn
+python-telegram-bot==20.8
+requests==2.31.0
+psycopg2-binary==2.9.9
+Flask==3.0.2
+gunicorn==21.2.0
